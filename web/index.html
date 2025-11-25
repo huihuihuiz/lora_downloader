@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI LoRA 下载器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+        .lora-list {
+            margin-top: 30px;
+        }
+        .lora-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .lora-item:last-child {
+            border-bottom: none;
+        }
+        .refresh-btn {
+            background-color: #5bc0de;
+            margin-top: 10px;
+        }
+        .refresh-btn:hover {
+            background-color: #31b0d5;
+        }
+        .download-btn {
+            background-color: #0275d8;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+            font-size: 14px;
+            display: inline-block;
+            width: auto;
+        }
+        .download-btn:hover {
+            background-color: #0260d0;
+        }
+        .lora-item-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ComfyUI LoRA 下载器</h1>
+        <form id="downloadForm">
+            <div class="form-group">
+                <label for="loraName">LoRA 文件名:</label>
+                <input type="text" id="loraName" placeholder="例如: my_model.safetensors" required>
+            </div>
+            <div class="form-group">
+                <label for="downloadUrl">下载链接:</label>
+                <input type="url" id="downloadUrl" placeholder="https://example.com/model.safetensors" required>
+            </div>
+            <button type="submit">下载 LoRA</button>
+        </form>
+        <div id="result" class="result"></div>
+        
+        <div class="lora-list">
+            <h2>已有的 LoRA 文件</h2>
+            <button id="refreshBtn" class="refresh-btn">刷新列表</button>
+            <div id="loraList"></div>
+        </div>
+    </div>
+
+    <script>
+        // 获取基础URL（ComfyUI服务器地址）
+        const baseUrl = window.location.origin;
+        
+        // 提交表单下载LoRA
+        document.getElementById('downloadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const loraName = document.getElementById('loraName').value;
+            const downloadUrl = document.getElementById('downloadUrl').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                const response = await fetch(`${baseUrl}/lora_downloader/download`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lora_name: loraName,
+                        download_url: downloadUrl
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = data.message;
+                    resultDiv.style.display = 'block';
+                    
+                    // 清空表单
+                    document.getElementById('downloadForm').reset();
+                    
+                    // 刷新LoRA列表
+                    loadLoraList();
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = data.error || '下载失败';
+                    resultDiv.style.display = 'block';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = '网络错误: ' + error.message;
+                resultDiv.style.display = 'block';
+            }
+        });
+        
+        // 加载LoRA文件列表
+        async function loadLoraList() {
+            const loraListDiv = document.getElementById('loraList');
+            
+            try {
+                const response = await fetch(`${baseUrl}/lora_downloader/list`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.loras && data.loras.length > 0) {
+                        let html = '<div>';
+                        data.loras.forEach(lora => {
+                            // 格式化文件大小
+                            const sizeInMB = (lora.size / (1024 * 1024)).toFixed(2);
+                            html += `<div class="lora-item-container"><div class="lora-item">${lora.name} (${sizeInMB} MB)</div><button class="download-btn" onclick="downloadLoraFile('${lora.name}')">下载到本地</button></div>`;
+                        });
+                        html += '</div>';
+                        loraListDiv.innerHTML = html;
+                    } else {
+                        loraListDiv.innerHTML = '<p>暂无LoRA文件</p>';
+                    }
+                } else {
+                    loraListDiv.innerHTML = `<p>加载失败: ${data.error}</p>`;
+                }
+            } catch (error) {
+                loraListDiv.innerHTML = `<p>网络错误: ${error.message}</p>`;
+            }
+        }
+        
+        // 下载LoRA文件到本地
+        function downloadLoraFile(filename) {
+            const downloadUrl = `${baseUrl}/lora_downloader/download_file/${encodeURIComponent(filename)}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // 刷新按钮事件
+        document.getElementById('refreshBtn').addEventListener('click', loadLoraList);
+        
+        // 页面加载完成后自动加载LoRA列表
+        window.addEventListener('load', loadLoraList);
+    </script>
+</body>
+</html>
