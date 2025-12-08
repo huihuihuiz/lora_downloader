@@ -67,14 +67,18 @@ async def list_loras_endpoint(request):
         lora_files = []
         
         if os.path.exists(lora_directory):
-            for file in os.listdir(lora_directory):
-                if file.endswith(('.safetensors', '.ckpt', '.pt')):
-                    file_path = os.path.join(lora_directory, file)
-                    file_size = os.path.getsize(file_path)
-                    lora_files.append({
-                        "name": file,
-                        "size": file_size
-                    })
+            # Recursively walk through all subdirectories
+            for root, dirs, files in os.walk(lora_directory):
+                for file in files:
+                    if file.endswith(('.safetensors', '.ckpt', '.pt')):
+                        file_path = os.path.join(root, file)
+                        file_size = os.path.getsize(file_path)
+                        # Get relative path from lora_directory
+                        relative_path = os.path.relpath(file_path, lora_directory)
+                        lora_files.append({
+                            "name": relative_path,
+                            "size": file_size
+                        })
         
         return web.json_response({"loras": lora_files}, status=200)
     except Exception as e:
@@ -116,10 +120,10 @@ async def serve_static_assets(request):
         return web.json_response({"error": str(e)}, status=500)
 
 # Download LoRA file from server to local
-@PromptServer.instance.routes.get("/lora_downloader/download_file/{filename}")
+@PromptServer.instance.routes.get("/lora_downloader/download_file/{filename:.+}")
 async def download_lora_file(request):
     try:
-        filename = request.match_info["filename"]
+        filename = urllib.parse.unquote(request.match_info["filename"])
         lora_directory = folder_paths.get_folder_paths("loras")[0]
         file_path = os.path.join(lora_directory, filename)
         
@@ -131,11 +135,14 @@ async def download_lora_file(request):
         if not os.path.exists(file_path):
             return web.json_response({"error": "File not found"}, status=404)
         
+        # Get just the filename without path for download
+        download_filename = os.path.basename(file_path)
+        
         # Set response headers for file download
         return web.FileResponse(
             file_path,
             headers={
-                'Content-Disposition': f'attachment; filename="{filename}"'
+                'Content-Disposition': f'attachment; filename="{download_filename}"'
             }
         )
     except Exception as e:
