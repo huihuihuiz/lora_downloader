@@ -1,0 +1,11 @@
+[project]
+name = "lora_downloader"
+description = "A ComfyUI custom node for downloading and managing LoRA models directly within the UI."
+version = "1.0.0"
+license = { text = "MIT" }
+requires-python = ">= 3.9"
+
+[tool.comfy]
+PublisherId = "huihuihuiz"
+DisplayName = "LoRA Downloader for ComfyUI"
+Icon = ""
